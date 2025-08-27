@@ -1,9 +1,9 @@
 name: 'Check Runner Availability'
 description: 'Check for availability of self-hosted GitHub runners and fallback to GitHub-hosted runners if needed'
-author: '@jimmygchen'
+author: '@mendesbarreto'
 branding:
   icon: activity
-  color: blue
+  color: green
 inputs:
   check-org-runners:
     description: 'If true it will look on the organization runners instead of repo runners'
