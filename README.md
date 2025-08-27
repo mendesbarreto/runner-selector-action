@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Select self-hosted runner with fallback
         id: runner-selector
-        uses: mendesbarreto/runner-selector@v1 
+        uses: mendesbarreto/runner-selector-action@v1 
         with:
           primary-runner: "self-hosted,linux"
           fallback-runner: "ubuntu-latest"
