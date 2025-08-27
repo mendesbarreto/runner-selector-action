@@ -1,42 +1,73 @@
-# Github Runner Fallback Action
+# Runner Selector Action
 
 <p align="center">
-  <a href="https://github.com/jimmygchen/runner-fallback-action/actions"><img alt="javscript-action status" src="https://github.com/jimmygchen/runner-fallback-action/workflows/units-test/badge.svg"></a>
+<a href="https://github.com/mendesbarreto/runner-selector/actions"><img alt="CI Status" src="https://github.com/mendesbarreto/runner-selector/workflows/units-test/badge.svg"></a>
+<a href="https://github.com/marketplace/actions/runner-selector"><img alt="Marketplace" src="https://img.shields.io/badge/Marketplace-Runner%20Selector-blue.svg?colorA=24292e&colorB=0366d6&style=flat&longCache=true&logo=github"></a>
 </p>
 
-Github action to determine the availability of self-hosted runners, and fallback to a GitHub runner if the primary runners are offline.
+Don't let offline self-hosted runners break your workflow! This GitHub Action dynamically selects a runner for your jobs. It checks for the availability of your primary self-hosted runners and seamlessly falls back to a GitHub-hosted runner if they are offline.
 
-This action uses [GitHub API](https://docs.github.com/en/rest/actions/self-hosted-runners?apiVersion=2022-11-28#list-self-hosted-runners-for-a-repository) to check the statuses of self hosted-runners that match specific labels, and outputs the runner label(s), or a fallback runner if the self-hosted runner(s) is unavailable.
+This action uses the [GitHub API](https://docs.github.com/en/rest/actions/self-hosted-runners) to check the status of self-hosted runners that match specific labels. It then outputs the appropriate runner label to be used in the `runs-on` property of subsequent jobs.
 
-This output can then used on the `runs-on` property of subsequent jobs. 
+## Inputs
 
-Note: In order to support an array of labels for the `runs-on` field, the output is formatted as a JSON string and needs to be parsed using `fromJson`. See example usage below.
+| Input             | Description                                                                                | Required | Default |
+| ----------------- | ------------------------------------------------------------------------------------------ | -------- | ------- |
+| `primary-runner`  | Comma-separated list of labels for the primary runner. Ex: `self-hosted,linux,x64`         | `true`   | `N/A`   |
+| `fallback-runner` | Label for the fallback runner if the primary is offline. Ex: `ubuntu-latest`               | `true`   | `N/A`   |
+| `github-token`    | GitHub token for querying runner information. See permissions below.                       | `true`   | `N/A`   |
+| `check-org-runners`| Set to `true` to check organization-level runners instead of repository-level runners.     | `false`  | `false` |
 
-## Usage
+## Outputs
+
+| Output       | Description                                                                    |
+| ------------ | ------------------------------------------------------------------------------ |
+| `use-runner` | A JSON-formatted string with the labels of the runner to use, ready for `fromJson`. |
+
+## Example Workflow
+
+The action is designed to run in a preliminary job that determines which runner is available. The output is then passed to the `matrix` or `runs-on` property of the main job(s).
 
 ```yaml
+name: CI Pipeline
+
 jobs:
-  # Job to 
+  # 1. This job "selects" the runner
   determine-runner:
     runs-on: ubuntu-latest
     outputs:
-      runner: ${{ steps.set-runner.outputs.use-runner }}
+      runner: ${{ steps.runner-selector.outputs.use-runner }}
     steps:
-      - name: Determine which runner to use
-        id: set-runner
-        uses: jimmygchen/runner-fallback-action@v1
+      - name: Select self-hosted runner with fallback
+        id: runner-selector
+        uses: mendesbarreto/runner-selector@v1 
         with:
           primary-runner: "self-hosted,linux"
           fallback-runner: "ubuntu-latest"
-          github-token: ${{ secrets.YOUR_GITHUB_TOKEN }}
-          check-org-runners: false  # set to true to check org-level runners
+          github-token: ${{ secrets.GH_TOKEN_FOR_ACTIONS }}
+          check-org-runners: false # Optional: set to true to check org-level runners
 
-  another-job:
+  build-and-test:
     needs: determine-runner
     runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
     steps:
-      - name: Do something
-        run: echo "Doing something on ${{ needs.determine-runner.outputs.runner }}"
+      - name: Print selected runner
+        run: echo "This job is running on ${{ needs.determine-runner.outputs.runner }}"
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ... your build and test steps here
 ```
 
-Credit: this action is based on the pattern described by @ianpurton on [this feature request thread](https://github.com/orgs/community/discussions/20019#discussioncomment-5414593).
+### Token Permissions
+
+You will need to create a personal access token (PAT) or use a GitHub App token with the correct permissions and add it to your repository secrets.
+
+The `github-token` requires the following permission:
+
+* `actions:read` - to read runner information for the repository or organization.
+
+## Credits
+
+This action is based on the pattern described by @ianpurton in [this feature request thread](https://github.com/orgs/community/discussions/20019#discussioncomment-5414593).
