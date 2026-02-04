@@ -30,7 +30,7 @@ describe("checkRunner", () => {
 			token: "fake-token",
 			owner: "fake-owner",
 			repo: "fake-repo",
-			primaryRunnerLabels: ["self-hosted", "linux"],
+			primaryRunner: ["self-hosted", "linux"],
 			fallbackRunner: "ubuntu-latest",
 		});
 
@@ -57,7 +57,7 @@ describe("checkRunner", () => {
 			token: "fake-token",
 			owner: "fake-owner",
 			repo: "fake-repo",
-			primaryRunnerLabels: ["self-hosted", "linux"],
+			primaryRunner: ["self-hosted", "linux"],
 			fallbackRunner: "ubuntu-latest",
 		});
 
@@ -73,7 +73,7 @@ describe("checkRunner", () => {
 			owner: "my-cool-org",
 			repo: "any-repo",
 			checkOrgRunners: true,
-			primaryRunnerLabels: ["self-hosted"],
+			primaryRunner: ["self-hosted"],
 			fallbackRunner: "ubuntu-latest",
 		};
 
@@ -90,7 +90,7 @@ describe("checkRunner", () => {
 			owner: "my-user",
 			repo: "my-awesome-repo",
 			checkOrgRunners: false,
-			primaryRunnerLabels: ["self-hosted"],
+			primaryRunner: ["self-hosted"],
 			fallbackRunner: "ubuntu-latest",
 		};
 		const expectedUrl =
@@ -99,5 +99,61 @@ describe("checkRunner", () => {
 		await checkRunner(inputs);
 
 		expect(mockGetJson).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+	});
+
+	it("should match runner by name when primary-runner is a runner name", async () => {
+		mockGetJson.mockResolvedValue({
+			statusCode: 200,
+			result: {
+				runners: [
+					{
+						name: "macos-m1-max-10-cores-local",
+						status: "online",
+						labels: [{ name: "self-hosted" }, { name: "macOS" }],
+					},
+				],
+			},
+		});
+
+		const result = await checkRunner({
+			token: "fake-token",
+			owner: "fake-owner",
+			repo: "fake-repo",
+			primaryRunner: ["macos-m1-max-10-cores-local"],
+			fallbackRunner: "ubuntu-latest",
+		});
+
+		expect(result).toEqual({
+			useRunner: '["macos-m1-max-10-cores-local"]',
+			primaryIsOnline: true,
+		});
+	});
+
+	it("should use fallback when runner name does not match and labels do not match", async () => {
+		mockGetJson.mockResolvedValue({
+			statusCode: 200,
+			result: {
+				runners: [
+					{
+						name: "other-runner",
+						status: "online",
+						labels: [{ name: "self-hosted" }, { name: "linux" }],
+					},
+				],
+			},
+		});
+
+		const result = await checkRunner({
+			token: "fake-token",
+			owner: "fake-owner",
+			repo: "fake-repo",
+			primaryRunner: ["macos-m1-max-10-cores-local"],
+			fallbackRunner: "ubuntu-latest",
+		});
+
+		expect(result).toEqual({
+			useRunner: '["ubuntu-latest"]',
+			primaryIsOnline: false,
+		});
 	});
 });
