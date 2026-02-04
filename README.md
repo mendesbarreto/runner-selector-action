@@ -13,10 +13,26 @@ This action uses the [GitHub API](https://docs.github.com/en/rest/actions/self-h
 
 | Input             | Description                                                                                | Required | Default |
 | ----------------- | ------------------------------------------------------------------------------------------ | -------- | ------- |
-| `primary-runner`  | Comma-separated list of labels for the primary runner. Ex: `self-hosted,linux,x64`         | `true`   | `N/A`   |
+| `primary-runner`  | Runner name OR comma-separated list of labels for the primary runner.                      | `true`   | `N/A`   |
 | `fallback-runner` | Label for the fallback runner if the primary is offline. Ex: `ubuntu-latest`               | `true`   | `N/A`   |
 | `github-token`    | GitHub token for querying runner information. See permissions below.                       | `true`   | `N/A`   |
 | `check-org-runners`| Set to `true` to check organization-level runners instead of repository-level runners.     | `false`  | `false` |
+
+### Primary Runner Matching
+
+The `primary-runner` input supports two matching modes:
+
+**By Labels (comma-separated):**
+```yaml
+primary-runner: "self-hosted,linux,x64"
+```
+Matches any online runner that has **all** the specified labels.
+
+**By Runner Name:**
+```yaml
+primary-runner: "my-custom-runner-name"
+```
+Matches an online runner with the exact name.
 
 ## Outputs
 
@@ -24,15 +40,16 @@ This action uses the [GitHub API](https://docs.github.com/en/rest/actions/self-h
 | ------------ | ------------------------------------------------------------------------------ |
 | `use-runner` | A JSON-formatted string with the labels of the runner to use, ready for `fromJson`. |
 
-## Example Workflow
+## Example Workflows
 
 The action is designed to run in a preliminary job that determines which runner is available. The output is then passed to the `matrix` or `runs-on` property of the main job(s).
+
+### Example 1: Match by Labels
 
 ```yaml
 name: CI Pipeline
 
 jobs:
-  # 1. This job "selects" the runner
   determine-runner:
     runs-on: ubuntu-latest
     outputs:
@@ -45,19 +62,61 @@ jobs:
           primary-runner: "self-hosted,linux"
           fallback-runner: "ubuntu-latest"
           github-token: ${{ secrets.GH_TOKEN_FOR_ACTIONS }}
-          check-org-runners: false # Optional: set to true to check org-level runners
 
   build-and-test:
     needs: determine-runner
     runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
     steps:
-      - name: Print selected runner
-        run: echo "This job is running on ${{ needs.determine-runner.outputs.runner }}"
-      
       - name: Checkout code
         uses: actions/checkout@v4
-
       # ... your build and test steps here
+```
+
+### Example 2: Match by Runner Name
+
+```yaml
+name: CI Pipeline
+
+jobs:
+  determine-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.runner-selector.outputs.use-runner }}
+    steps:
+      - name: Select self-hosted runner with fallback
+        id: runner-selector
+        uses: mendesbarreto/runner-selector-action@v1 
+        with:
+          primary-runner: "macos-m1-build-server"
+          fallback-runner: "macos-latest"
+          github-token: ${{ secrets.GH_TOKEN_FOR_ACTIONS }}
+
+  build-ios:
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # ... your iOS build steps here
+```
+
+### Example 3: Check Organization-Level Runners
+
+```yaml
+jobs:
+  determine-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.runner-selector.outputs.use-runner }}
+    steps:
+      - name: Select org runner with fallback
+        id: runner-selector
+        uses: mendesbarreto/runner-selector-action@v1 
+        with:
+          primary-runner: "self-hosted,linux"
+          fallback-runner: "ubuntu-latest"
+          github-token: ${{ secrets.GH_TOKEN_FOR_ACTIONS }}
+          check-org-runners: true
 ```
 
 ### Token Permissions
